@@ -4,13 +4,6 @@ project(stratego CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Detect if building for Emscripten (WASM)
-if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
-    set(CMAKE_EXECUTABLE_SUFFIX ".html") # Output an HTML file for easy testing
-    set(BUILD_FOR_WASM TRUE)
-else()
-    set(BUILD_FOR_WASM FALSE)
-endif()
 
 # Add Raylib
 include(FetchContent)
@@ -31,6 +24,10 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(raylib)
 
+find_package(OpenSSL REQUIRED)
+find_package(Threads REQUIRED)
+
+
 # Add source files
 file(GLOB_RECURSE PROJECT_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/sources/*.cpp") # Define PROJECT_SOURCES as a list of all source files
 set(PROJECT_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/sources/") # Define PROJECT_INCLUDE to be the path to the include directory of the project
@@ -40,6 +37,19 @@ add_executable(${PROJECT_NAME})
 target_sources(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_INCLUDE})
 target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
+
+
+# Wasm compile script
+set(BATCH_FILE_PATH "${CMAKE_SOURCE_DIR}/compile.bat")
+
+# This will build for WASM
+add_custom_command(
+    TARGET ${PROJECT_NAME}
+    POST_BUILD
+    COMMAND ${BATCH_FILE_PATH}
+    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
 
 # Set asset path
 if(BUILD_FOR_WASM)

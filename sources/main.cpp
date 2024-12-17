@@ -1,180 +1,145 @@
+#include <iostream>
+
 #include "raylib.h"
+#include "rlgl.h"
+#include "raymath.h"
 
-#include <stdlib.h>         // Required for: calloc(), free()
+#include "movement.h"
+#include "wasm.h"
 
-#define STORAGE_DATA_FILE   "storage.data"   // Storage file
 
-// NOTE: Storage positions must start with 0, directly related to file memory layout
-typedef enum {
-    STORAGE_POSITION_SCORE      = 0,
-    STORAGE_POSITION_HISCORE    = 1
-} StorageData;
-
-// Persistent storage functions
-static bool SaveStorageValue(unsigned int position, int value);
-static int LoadStorageValue(unsigned int position);
-
-//------------------------------------------------------------------------------------
-// Program main entry point
-//------------------------------------------------------------------------------------
-int main(void)
+int main()
 {
-    // Initialization
-    //--------------------------------------------------------------------------------------
-    const int screenWidth = 800;
-    const int screenHeight = 450;
+	WASM_ONLY
+	(
+		EM_ASM
+		(
+			{
+				// Create a script element to load the CDN
+				var script = document.createElement('script');
+				script.src = "https://cdn.socket.io/4.8.1/socket.io.min.js";
+				script.integrity = "sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+";
 
-    InitWindow(screenWidth, screenHeight, "raylib [core] example - storage save/load values");
+				script.onload = function() {
+					console.log('Socket io loaded!!');
+					const socket = io('http://localhost:3000');
+				};
+				document.head.appendChild(script);
 
-    int score = 0;
-    int hiscore = 0;
-    int framesCounter = 0;
+			}
+		);
+	)
 
-    SetTargetFPS(60);               // Set our game to run at 60 frames-per-second
-    //--------------------------------------------------------------------------------------
+	
+	const int screenWidth = 1440;
+	const int screenHeight = 810;
 
-    // Main game loop
-    while (!WindowShouldClose())    // Detect window close button or ESC key
-    {
-        // Update
-        //----------------------------------------------------------------------------------
-        if (IsKeyPressed(KEY_R))
-        {
-            score = GetRandomValue(1000, 2000);
-            hiscore = GetRandomValue(2000, 4000);
-        }
+	InitWindow(screenWidth, screenHeight, "Stratego");
 
-        if (IsKeyPressed(KEY_ENTER))
-        {
-            SaveStorageValue(STORAGE_POSITION_SCORE, score);
-            SaveStorageValue(STORAGE_POSITION_HISCORE, hiscore);
-        }
-        else if (IsKeyPressed(KEY_SPACE))
-        {
-            // NOTE: If requested position could not be found, value 0 is returned
-            score = LoadStorageValue(STORAGE_POSITION_SCORE);
-            hiscore = LoadStorageValue(STORAGE_POSITION_HISCORE);
-        }
+	Camera2D camera = { 0 };
+	camera.zoom = 1.0f;
 
-        framesCounter++;
-        //----------------------------------------------------------------------------------
+	int zoomMode = 0;
 
-        // Draw
-        //----------------------------------------------------------------------------------
-        BeginDrawing();
+	SetTargetFPS(60);
 
-            ClearBackground(RAYWHITE);
+	while (!WindowShouldClose())        // Detect window close button or ESC key
+	{
+		if (IsKeyPressed(KEY_ONE)) zoomMode = 0;
+		else if (IsKeyPressed(KEY_TWO)) zoomMode = 1;
 
-            DrawText(TextFormat("SCORE: %i", score), 280, 130, 40, MAROON);
-            DrawText(TextFormat("HI-SCORE: %i", hiscore), 210, 200, 50, BLACK);
+		// Translate based on mouse right click
+		if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
+		{
+			Vector2 delta = GetMouseDelta();
+			delta = Vector2Scale(delta, -1.0f / camera.zoom);
+			camera.target = Vector2Add(camera.target, delta);
+		}
 
-            DrawText(TextFormat("frames: %i", framesCounter), 10, 10, 20, LIME);
+		if (zoomMode == 0)
+		{
+			// Zoom based on mouse wheel
+			float wheel = GetMouseWheelMove();
+			if (wheel != 0)
+			{
+				// Get the world point that is under the mouse
+				Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
 
-            DrawText("Press R to generate random numbers", 220, 40, 20, LIGHTGRAY);
-            DrawText("Press ENTER to SAVE values", 250, 310, 20, LIGHTGRAY);
-            DrawText("Press SPACE to LOAD values", 252, 350, 20, LIGHTGRAY);
+				// Set the offset to where the mouse is
+				camera.offset = GetMousePosition();
 
-        EndDrawing();
-        //----------------------------------------------------------------------------------
-    }
+				// Set the target to match, so that the camera maps the world space point 
+				// under the cursor to the screen space point under the cursor at any zoom
+				camera.target = mouseWorldPos;
 
-    // De-Initialization
-    //--------------------------------------------------------------------------------------
-    CloseWindow();        // Close window and OpenGL context
-    //--------------------------------------------------------------------------------------
+				// Zoom increment
+				float scaleFactor = 1.0f + (0.25f * fabsf(wheel));
+				if (wheel < 0) scaleFactor = 1.0f / scaleFactor;
+				camera.zoom = Clamp(camera.zoom * scaleFactor, 0.125f, 64.0f);
+			}
+		}
+		else
+		{
+			// Zoom based on mouse right click
+			if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
+			{
+				// Get the world point that is under the mouse
+				Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
 
-    return 0;
-}
+				// Set the offset to where the mouse is
+				camera.offset = GetMousePosition();
 
-// Save integer value to storage file (to defined position)
-// NOTE: Storage positions is directly related to file memory layout (4 bytes each integer)
-bool SaveStorageValue(unsigned int position, int value)
-{
-    bool success = false;
-    int dataSize = 0;
-    unsigned int newDataSize = 0;
-    unsigned char *fileData = LoadFileData(STORAGE_DATA_FILE, &dataSize);
-    unsigned char *newFileData = NULL;
+				// Set the target to match, so that the camera maps the world space point 
+				// under the cursor to the screen space point under the cursor at any zoom
+				camera.target = mouseWorldPos;
+			}
+			if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
+			{
+				// Zoom increment
+				float deltaX = GetMouseDelta().x;
+				float scaleFactor = 1.0f + (0.01f * fabsf(deltaX));
+				if (deltaX < 0) scaleFactor = 1.0f / scaleFactor;
+				camera.zoom = Clamp(camera.zoom * scaleFactor, 0.125f, 64.0f);
+			}
+		}
+		//----------------------------------------------------------------------------------
 
-    if (fileData != NULL)
-    {
-        if (dataSize <= (position*sizeof(int)))
-        {
-            // Increase data size up to position and store value
-            newDataSize = (position + 1)*sizeof(int);
-            newFileData = (unsigned char *)RL_REALLOC(fileData, newDataSize);
+		// Draw
+		//----------------------------------------------------------------------------------
+		BeginDrawing();
+		ClearBackground(RAYWHITE);
 
-            if (newFileData != NULL)
-            {
-                // RL_REALLOC succeded
-                int *dataPtr = (int *)newFileData;
-                dataPtr[position] = value;
-            }
-            else
-            {
-                // RL_REALLOC failed
-                TraceLog(LOG_WARNING, "FILEIO: [%s] Failed to realloc data (%u), position in bytes (%u) bigger than actual file size", STORAGE_DATA_FILE, dataSize, position*sizeof(int));
+		BeginMode2D(camera);
 
-                // We store the old size of the file
-                newFileData = fileData;
-                newDataSize = dataSize;
-            }
-        }
-        else
-        {
-            // Store the old size of the file
-            newFileData = fileData;
-            newDataSize = dataSize;
+		// Draw the 3d grid, rotated 90 degrees and centered around 0,0 
+		// just so we have something in the XY plane
+		rlPushMatrix();
+		rlTranslatef(0, 25 * 50, 0);
+		rlRotatef(90, 1, 0, 0);
+		DrawGrid(100, 50);
+		rlPopMatrix();
 
-            // Replace value on selected position
-            int *dataPtr = (int *)newFileData;
-            dataPtr[position] = value;
-        }
+		// Draw a reference circle
+		DrawCircle(GetScreenWidth() / 2, GetScreenHeight() / 2, 50, MAROON);
 
-        success = SaveFileData(STORAGE_DATA_FILE, newFileData, newDataSize);
-        RL_FREE(newFileData);
+		EndMode2D();
 
-        TraceLog(LOG_INFO, "FILEIO: [%s] Saved storage value: %i", STORAGE_DATA_FILE, value);
-    }
-    else
-    {
-        TraceLog(LOG_INFO, "FILEIO: [%s] File created successfully", STORAGE_DATA_FILE);
+		// Draw mouse reference
+		//Vector2 mousePos = GetWorldToScreen2D(GetMousePosition(), camera)
+		DrawCircleV(GetMousePosition(), 4, DARKGRAY);
+		DrawTextEx(GetFontDefault(), TextFormat("[%i, %i]", GetMouseX(), GetMouseY()), Vector2Add(GetMousePosition(), { -44, -24 }), 20, 2, BLACK);
 
-        dataSize = (position + 1)*sizeof(int);
-        fileData = (unsigned char *)RL_MALLOC(dataSize);
-        int *dataPtr = (int *)fileData;
-        dataPtr[position] = value;
+		DrawText("[1][2] Select mouse zoom mode (Wheel or Move)", 20, 20, 20, DARKGRAY);
+		if (zoomMode == 0) DrawText("Mouse left button drag to move, mouse wheel to zoom", 20, 50, 20, DARKGRAY);
+		else DrawText("Mouse left button drag to move, mouse press and move to zoom", 20, 50, 20, DARKGRAY);
 
-        success = SaveFileData(STORAGE_DATA_FILE, fileData, dataSize);
-        UnloadFileData(fileData);
+		EndDrawing();
+		//----------------------------------------------------------------------------------
+	}
 
-        TraceLog(LOG_INFO, "FILEIO: [%s] Saved storage value: %i", STORAGE_DATA_FILE, value);
-    }
-
-    return success;
-}
-
-// Load integer value from storage file (from defined position)
-// NOTE: If requested position could not be found, value 0 is returned
-int LoadStorageValue(unsigned int position)
-{
-    int value = 0;
-    int dataSize = 0;
-    unsigned char *fileData = LoadFileData(STORAGE_DATA_FILE, &dataSize);
-
-    if (fileData != NULL)
-    {
-        if (dataSize < ((int)(position*4))) TraceLog(LOG_WARNING, "FILEIO: [%s] Failed to find storage position: %i", STORAGE_DATA_FILE, position);
-        else
-        {
-            int *dataPtr = (int *)fileData;
-            value = dataPtr[position];
-        }
-
-        UnloadFileData(fileData);
-
-        TraceLog(LOG_INFO, "FILEIO: [%s] Loaded storage value: %i", STORAGE_DATA_FILE, value);
-    }
-
-    return value;
+	// De-Initialization
+	//--------------------------------------------------------------------------------------
+	CloseWindow();        // Close window and OpenGL context
+	//--------------------------------------------------------------------------------------
+	return 0;
 }
