@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
 project(stratego CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 
@@ -24,6 +24,8 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(raylib)
 
+add_subdirectory(Vendor)
+
 find_package(OpenSSL REQUIRED)
 find_package(Threads REQUIRED)
 
@@ -37,6 +39,7 @@ add_executable(${PROJECT_NAME})
 target_sources(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_INCLUDE})
 target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
+target_link_libraries(${PROJECT_NAME} PRIVATE uWebSockets)
 
 
 # Wasm compile script
