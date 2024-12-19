@@ -18,17 +18,22 @@ int main()
 				// Create a script element to load the CDN
 				var script = document.createElement('script');
 				script.src = "https://cdn.socket.io/4.8.1/socket.io.min.js";
-				script.integrity = "sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+";
 
 				script.onload = function() {
-					console.log('Socket io loaded!!');
+					console.log('Socket io loaded!');
 					const socket = io('http://localhost:3000');
 				};
 				document.head.appendChild(script);
 
 			}
 		);
-	)
+	);
+
+	NATIVE_ONLY
+	(
+		sio::client client;
+		client.connect("http://localhost:3000");
+	);
 
 	
 	const int screenWidth = 1440;
