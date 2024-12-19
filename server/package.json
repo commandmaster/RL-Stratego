@@ -10,7 +10,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
+    "engine.io": "^6.6.2",
     "express": "^4.21.2",
+    "http": "^0.0.1-security",
     "socket.io": "^4.8.1"
   }
 }

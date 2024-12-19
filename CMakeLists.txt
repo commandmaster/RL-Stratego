@@ -7,6 +7,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Add Raylib
 include(FetchContent)
+include("C:/vcpkg/scripts/buildsystems/vcpkg.cmake")
+
 set(FETCHCONTENT_QUIET FALSE)
 set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE) # Don't build supplied examples
 set(BUILD_GAMES    OFF CACHE BOOL "" FORCE) # Don't build supplied example games
@@ -24,9 +26,8 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(raylib)
 
-find_package(Boost REQUIRED)
-find_package(sioclient CONFIG REQUIRED)
-  
+#find_package(Boost REQUIRED)
+find_package(sioclient REQUIRED)
 # Add source files
 file(GLOB_RECURSE PROJECT_SOURCES CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/sources/*.cpp") # Define PROJECT_SOURCES as a list of all source files
 set(PROJECT_INCLUDE "${CMAKE_CURRENT_LIST_DIR}/sources/") # Define PROJECT_INCLUDE to be the path to the include directory of the project
@@ -36,7 +37,7 @@ add_executable(${PROJECT_NAME})
 target_sources(${PROJECT_NAME} PRIVATE ${PROJECT_SOURCES})
 target_include_directories(${PROJECT_NAME} PRIVATE ${PROJECT_INCLUDE})
 target_link_libraries(${PROJECT_NAME} PRIVATE raylib)
-target_link_libraries(${PROJECT_NAME} LINK_PUBLIC ${Boost_LIBRARIES})
+#target_link_libraries(${PROJECT_NAME} LINK_PUBLIC ${Boost_LIBRARIES})
 target_link_libraries(${PROJECT_NAME} PRIVATE sioclient::sioclient sioclient::sioclient_tls)
 
 

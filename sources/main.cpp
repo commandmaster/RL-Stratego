@@ -4,8 +4,7 @@
 #include "rlgl.h"
 #include "raymath.h"
 
-#include "movement.h"
-#include "wasm.h"
+#include "core.h"
 
 
 int main()
@@ -36,10 +35,12 @@ int main()
 	);
 
 	
-	const int screenWidth = 1440;
-	const int screenHeight = 810;
+	int screenWidth = 1440;
+	int screenHeight = 810;
 
+	NATIVE_ONLY(SetConfigFlags(FLAG_WINDOW_RESIZABLE););
 	InitWindow(screenWidth, screenHeight, "Stratego");
+
 
 	Camera2D camera = { 0 };
 	camera.zoom = 1.0f;
@@ -48,8 +49,14 @@ int main()
 
 	SetTargetFPS(60);
 
-	while (!WindowShouldClose())        // Detect window close button or ESC key
+	while (!WindowShouldClose())  
 	{
+		#ifdef WASM
+		// Get the canvas width
+		emscripten_get_canvas_element_size("#myCanvas", &screenWidth, &screenHeight);
+		SetWindowSize(screenWidth, screenHeight);
+		#endif
+
 		if (IsKeyPressed(KEY_ONE)) zoomMode = 0;
 		else if (IsKeyPressed(KEY_TWO)) zoomMode = 1;
 
