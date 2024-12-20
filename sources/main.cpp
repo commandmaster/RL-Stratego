@@ -5,102 +5,33 @@
 #include "raymath.h"
 
 #include "core.h"
+#include "networking.h"
+#include "sceneController2D.h"
+
+
 
 
 int main()
 {
-
-	
-	int screenWidth = 1440;
-	int screenHeight = 810;
+	int screenWidth = 960;
+	int screenHeight = 540;
 
 	NATIVE_ONLY(SetConfigFlags(FLAG_WINDOW_RESIZABLE););
 	InitWindow(screenWidth, screenHeight, "Stratego");
 
 	NetworkManager netManager{ "http://localhost:3000" };
-
-	Camera2D camera = { 0 };
-	camera.zoom = 1.0f;
-
-	int zoomMode = 0;
-
+	SceneController2D sceneManager{};
+	
 	SetTargetFPS(60);
 
 	while (!WindowShouldClose())  
 	{
-		#ifdef WASM
-		emscripten_get_canvas_element_size("#myCanvas", &screenWidth, &screenHeight);
-		SetWindowSize(screenWidth, screenHeight);
-		#endif
-
-
-		netManager.sendMessage("test", "this is a crazy message");
-
-		if (IsKeyPressed(KEY_ONE)) zoomMode = 0;
-		else if (IsKeyPressed(KEY_TWO)) zoomMode = 1;
-
-		// Translate based on mouse right click
-		if (IsMouseButtonDown(MOUSE_BUTTON_LEFT))
-		{
-			Vector2 delta = GetMouseDelta();
-			delta = Vector2Scale(delta, -1.0f / camera.zoom);
-			camera.target = Vector2Add(camera.target, delta);
-		}
-
-		if (zoomMode == 0)
-		{
-			// Zoom based on mouse wheel
-			float wheel = GetMouseWheelMove();
-			if (wheel != 0)
-			{
-				// Get the world point that is under the mouse
-				Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
-
-				// Set the offset to where the mouse is
-				camera.offset = GetMousePosition();
-
-				// Set the target to match, so that the camera maps the world space point 
-				// under the cursor to the screen space point under the cursor at any zoom
-				camera.target = mouseWorldPos;
-
-				// Zoom increment
-				float scaleFactor = 1.0f + (0.25f * fabsf(wheel));
-				if (wheel < 0) scaleFactor = 1.0f / scaleFactor;
-				camera.zoom = Clamp(camera.zoom * scaleFactor, 0.125f, 64.0f);
-			}
-		}
-		else
-		{
-			// Zoom based on mouse right click
-			if (IsMouseButtonPressed(MOUSE_BUTTON_RIGHT))
-			{
-				// Get the world point that is under the mouse
-				Vector2 mouseWorldPos = GetScreenToWorld2D(GetMousePosition(), camera);
-
-				// Set the offset to where the mouse is
-				camera.offset = GetMousePosition();
-
-				// Set the target to match, so that the camera maps the world space point 
-				// under the cursor to the screen space point under the cursor at any zoom
-				camera.target = mouseWorldPos;
-			}
-			if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT))
-			{
-				// Zoom increment
-				float deltaX = GetMouseDelta().x;
-				float scaleFactor = 1.0f + (0.01f * fabsf(deltaX));
-				if (deltaX < 0) scaleFactor = 1.0f / scaleFactor;
-				camera.zoom = Clamp(camera.zoom * scaleFactor, 0.125f, 64.0f);
-			}
-		}
-		//----------------------------------------------------------------------------------
-
-		// Draw
-		//----------------------------------------------------------------------------------
+		char buffer[3] = {0, 1, 2};
+		netManager.sendBinary("test", buffer, 3);
+		
 		BeginDrawing();
-		ClearBackground(RAYWHITE);
 
-		BeginMode2D(camera);
+		sceneManager.beginUpdate(&screenWidth, &screenHeight);
 
 		// Draw the 3d grid, rotated 90 degrees and centered around 0,0 
 		// just so we have something in the XY plane
@@ -112,24 +43,18 @@ int main()
 
 		// Draw a reference circle
 		DrawCircle(GetScreenWidth() / 2, GetScreenHeight() / 2, 50, MAROON);
-
-		EndMode2D();
+		
+		sceneManager.endUpdate();
 
 		// Draw mouse reference
 		//Vector2 mousePos = GetWorldToScreen2D(GetMousePosition(), camera)
 		DrawCircleV(GetMousePosition(), 4, DARKGRAY);
 		DrawTextEx(GetFontDefault(), TextFormat("[%i, %i]", GetMouseX(), GetMouseY()), Vector2Add(GetMousePosition(), { -44, -24 }), 20, 2, BLACK);
 
-		DrawText("[1][2] Select mouse zoom mode (Wheel or Move)", 20, 20, 20, DARKGRAY);
-		if (zoomMode == 0) DrawText("Mouse left button drag to move, mouse wheel to zoom", 20, 50, 20, DARKGRAY);
-		else DrawText("Mouse left button drag to move, mouse press and move to zoom", 20, 50, 20, DARKGRAY);
 
 		EndDrawing();
-		//----------------------------------------------------------------------------------
 	}
 
-	//--------------------------------------------------------------------------------------
 	CloseWindow();        // Close window and OpenGL context
-	//--------------------------------------------------------------------------------------
 	return 0;
 }

@@ -1,7 +1,11 @@
 #include <string>
 #include <sio_client.h>
 #include <sio_message.h>
+
 #include <iostream>
+#include <vector>
+#include <memory>
+#include <stdint.h>
 
 class NetworkManager
 {
@@ -59,6 +63,25 @@ public:
 	{
 		client.socket()->emit(eventName.c_str(), sio::string_message::create(message));
 	}
+
+	void sendBinary(const std::string& eventName, const std::vector<uint8_t>& binaryData)
+	{
+		auto binaryString = std::make_shared<std::string>(binaryData.begin(), binaryData.end());
+
+		client.socket()->emit(eventName.c_str(), sio::binary_message::create(binaryString));
+	}
+
+	void sendBinary(const std::string& eventName, const char* binaryData, size_t dataSize) {
+        auto binaryString = std::make_shared<std::string>(binaryData, dataSize);
+
+        client.socket()->emit(eventName.c_str(), sio::binary_message::create(binaryString));
+    }
+
+	void sendBinary(const std::string& eventName, const uint8_t* binaryData, size_t dataSize) {
+        auto binaryString = std::make_shared<std::string>(reinterpret_cast<const char*>(binaryData), dataSize);
+
+        client.socket()->emit(eventName.c_str(), sio::binary_message::create(binaryString));
+    }
 
 
 	NetworkManager (const NetworkManager&) = delete;

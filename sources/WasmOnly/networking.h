@@ -1,76 +1,123 @@
-#include <string>
-#include <iostream>
 #include <emscripten.h>
+#include <string>
+#include <memory>
+#include <vector>
+#include <stdint.h>
 
-class NetworkManager
+class NetworkManager 
 {
 private:
-	std::string address;
+    std::string address;
+
+    void initializeSocketIO(const std::string& address) {
+        EM_ASM(
+            {
+                var serverAddress = UTF8ToString($0);
+
+                // Load Socket.IO script
+                var script = document.createElement('script');
+                script.src = "https://cdn.socket.io/4.8.1/socket.io.min.js";
+
+                script.onload = function() {
+                    console.log('Socket.io loaded!');
+                    window.socket = io(serverAddress);
+                    console.log('Connected to server at:', serverAddress);
+                };
+                document.head.appendChild(script);
+            },
+            address.c_str()
+        );
+    }
+
+    void sendMessageToJS(const char* eventName, const char* message) {
+        EM_ASM(
+            {
+                var eventName = UTF8ToString($0);
+                var message = UTF8ToString($1);
+
+                if (window.socket) {
+                    window.socket.emit(eventName, message);
+                } else {
+                    console.error('Socket.io is not initialized yet!');
+                }
+            },
+            eventName, message
+        );
+    }
+
+
 
 public:
-	NetworkManager(const int port)
-    : address{ std::string("http://localhost:") + std::to_string(port) }
-	{
-		EM_ASM(
-			{
-				var serverAddress = UTF8ToString($0);
+    NetworkManager(const int port)
+        : address{ std::string("http://localhost:") + std::to_string(port) }
+    {
+        initializeSocketIO(address);
+    }
 
-				var script = document.createElement('script');
-				script.src = "https://cdn.socket.io/4.8.1/socket.io.min.js";
+    NetworkManager(const std::string& address)
+        : address{ address }
+    {
+        initializeSocketIO(address);
+    }
 
-				script.onload = function() {
-					console.log('Socket.io loaded!');
-					const socket = io(serverAddress);
-					console.log('Connected to server at:', serverAddress);
-				};
-				document.head.appendChild(script);
-			},
-			address.c_str() 
-		);
-	}
+    void sendMessage(const std::string& eventName, const std::string& message) {
+        sendMessageToJS(eventName.c_str(), message.c_str());
+    }
 
+    void sendMessage(const char* eventName, const std::string& message) {
+        sendMessageToJS(eventName, message.c_str());
+    }
 
-	NetworkManager(const std::string address)
-		: address{ address }
-	{
-		EM_ASM(
-			{
-				var serverAddress = UTF8ToString($0);
+    void sendMessage(const char* eventName, const char* message) {
+        sendMessageToJS(eventName, message);
+    }
 
-				var script = document.createElement('script');
-				script.src = "https://cdn.socket.io/4.8.1/socket.io.min.js";
+    void sendMessage(const std::string& eventName, const char* message) {
+        sendMessageToJS(eventName.c_str(), message);
+    }
 
-				script.onload = function() {
-					console.log('Socket.io loaded!');
-					const socket = io(serverAddress);
-					console.log('Connected to server at:', serverAddress);
-				};
-				document.head.appendChild(script);
-			},
-			address.c_str() 
-		);
-	}
+    void sendBinary(const char* eventName, const std::vector<uint8_t>& binaryData) {
+        EM_ASM(
+            {
+                var eventName = UTF8ToString($0);
+                var dataSize = $1;
+                var dataPtr = $2;
 
-	std::string getAddress() const 
-	{
-		return address;
-	}
+                // Convert C++ binary data to a JavaScript Uint8Array
+                var binaryData = new Uint8Array(Module.HEAPU8.buffer, dataPtr, dataSize);
 
-	void sendMessage(std::string eventName, std::string message)
-	{
-	}
+                if (window.socket) {
+                    window.socket.emit(eventName, binaryData);
+                } else {
+                    console.error('Socket.io is not initialized yet!');
+                }
+            },
+            eventName, binaryData.size(), binaryData.data()
+        );
+    }
 
-	void sendMessage(const char* eventName, std::string message)
-	{
-	}
+    void sendBinary(const char* eventName, const char* binaryData, size_t dataSize) {
+        EM_ASM(
+            {
+                var eventName = UTF8ToString($0);
+                var dataSize = $1;
+                var dataPtr = $2;
 
-	void sendMessage(const char* eventName, const char* message)
-	{
-	}
+                var binaryData = new Uint8Array(Module.HEAPU8.buffer, dataPtr, dataSize);
 
-	void sendMessage(std::string eventName, const char* message)
-	{
-	}
+                if (window.socket) {
+                    window.socket.emit(eventName, binaryData);
+                } else {
+                    console.error('Socket.io is not initialized yet!');
+                }
+            },
+            eventName, dataSize, binaryData
+        );
+    }
+
+    void sendBinary(const char* eventName, const uint8_t* binaryData, size_t dataSize) {
+        sendBinary(eventName, reinterpret_cast<const char*>(binaryData), dataSize);
+    }
 
 	NetworkManager (const NetworkManager&) = delete;
 	NetworkManager& operator= (const NetworkManager&) = delete;
