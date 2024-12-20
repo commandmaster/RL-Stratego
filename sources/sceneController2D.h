@@ -8,9 +8,10 @@ class SceneController2D
 {
 private:
 	int zoomMode;
-	Camera2D camera;
 	
 public:
+	Camera2D camera;
+
 	SceneController2D()
 		: zoomMode{ 0 }, camera{ 0 }
 	{
