@@ -9,30 +9,6 @@
 
 int main()
 {
-	WASM_ONLY
-	(
-		EM_ASM
-		(
-			{
-				// Create a script element to load the CDN
-				var script = document.createElement('script');
-				script.src = "https://cdn.socket.io/4.8.1/socket.io.min.js";
-
-				script.onload = function() {
-					console.log('Socket io loaded!');
-					const socket = io('http://localhost:3000');
-				};
-				document.head.appendChild(script);
-
-			}
-		);
-	);
-
-	NATIVE_ONLY
-	(
-		sio::client client;
-		client.connect("http://localhost:3000");
-	);
 
 	
 	int screenWidth = 1440;
@@ -41,6 +17,7 @@ int main()
 	NATIVE_ONLY(SetConfigFlags(FLAG_WINDOW_RESIZABLE););
 	InitWindow(screenWidth, screenHeight, "Stratego");
 
+	NetworkManager netManager{ "http://localhost:3000" };
 
 	Camera2D camera = { 0 };
 	camera.zoom = 1.0f;
@@ -52,10 +29,12 @@ int main()
 	while (!WindowShouldClose())  
 	{
 		#ifdef WASM
-		// Get the canvas width
 		emscripten_get_canvas_element_size("#myCanvas", &screenWidth, &screenHeight);
 		SetWindowSize(screenWidth, screenHeight);
 		#endif
+
+
+		netManager.sendMessage("test", "this is a crazy message");
 
 		if (IsKeyPressed(KEY_ONE)) zoomMode = 0;
 		else if (IsKeyPressed(KEY_TWO)) zoomMode = 1;
@@ -149,7 +128,6 @@ int main()
 		//----------------------------------------------------------------------------------
 	}
 
-	// De-Initialization
 	//--------------------------------------------------------------------------------------
 	CloseWindow();        // Close window and OpenGL context
 	//--------------------------------------------------------------------------------------

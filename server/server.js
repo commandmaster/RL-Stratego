@@ -32,6 +32,10 @@ io.on('connection', (socket) => {
         console.log('Message from client:', data);
     });
 
+    socket.on('test', (data) => {
+        console.log('test message: ' + data);
+    });
+
     // Handle disconnection
     socket.on('disconnect', () => {
         console.log('A user disconnected');
