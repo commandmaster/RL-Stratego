@@ -2,6 +2,8 @@ const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
 const path = require('path');
+const Game = require('./gameBackend.js');
+
 
 const app = express();
 const port = 3000;
@@ -20,14 +22,39 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'stratego.html'));
 });
 
-// Handle WebSocket connections
+let roomIdIndex = 0;
+let games = new Map();
+
 io.on('connection', (socket) => {
     console.log('A user connected');
 
-    // Send a message to the client
-    socket.emit('message', 'Welcome to the Socket.IO server!');
+    socket.on("createGame", () => {
+        console.log("Creating game");
+        const roomID = "room-" + roomIdIndex++;
+        const game = new Game(roomID);
+        socket.emit("roomCode", roomID);
+        console.log("Room ID: " + roomID);  
+        games.set(roomID, game);
+        game.join(socket);
+    });
 
-    // Listen for messages from the client
+    socket.on("joinGame", (roomID) => {
+        // Append 'room-' if not already present
+        if (!roomID.startsWith("room-")) {
+            roomID = "room-" + roomID;
+        }
+
+        const game = games.get(roomID);
+        
+        if (!game) {
+            socket.emit("invalidRoomID", "Invalid room ID");
+            return;
+        }
+        game.join(socket);
+    });
+
+
+
     socket.on('message', (data) => {
         console.log('Message from client:', data);
     });
@@ -36,9 +63,20 @@ io.on('connection', (socket) => {
         console.log('test message: ' + data);
     });
 
-    // Handle disconnection
     socket.on('disconnect', () => {
         console.log('A user disconnected');
+
+        for (const [roomID, game] of games) {
+            if (game.players[socket.id]) {
+                game.playerCount--;
+                delete game.players[socket.id];
+                socket.leave(roomID);
+
+                if (game.playerCount === 0) {
+                    games.delete(roomID);
+                }
+            }
+        }
     });
 });
 

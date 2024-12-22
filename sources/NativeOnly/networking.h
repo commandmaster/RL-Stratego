@@ -1,3 +1,5 @@
+#pragma once
+
 #include <string>
 #include <sio_client.h>
 #include <sio_message.h>
@@ -6,37 +8,52 @@
 #include <vector>
 #include <memory>
 #include <stdint.h>
+#include <mutex>
+
+
+
+
+
 
 class NetworkManager
 {
 private:
 	std::string address;
 	sio::client client;
+	std::mutex event_mutex;
+
+	struct Listener {
+		std::string eventName;
+		std::function<void(const std::string&)> callback;
+
+		Listener(const std::string& event, std::function<void(const std::string&)> cb)
+			: eventName(event), callback(std::move(cb)) {}
+	};
 
 public:
-	NetworkManager(const int port)
-		: address{ std::string("http://localhost:") + std::to_string(port) }, client{}
+	static NetworkManager& getInstance() 
 	{
-		client.connect(address);
-		client.set_open_listener([&]() 
-		{
-			std::cout << "Connected to " << address << std::endl;
-		});
-	}
+		static NetworkManager instance;
+        return instance;
+    }
 
-	NetworkManager(const std::string address)
-		: address{ address }, client{}
+	NetworkManager()
+		: client{}
 	{
-		client.connect(address);
 		client.set_open_listener([&]() 
 		{
-			std::cout << "Connected to " << address << std::endl;
+			std::cout << "Connected to " << this->address << std::endl;
 		});
 	}
 
 	~NetworkManager()
 	{
 		client.close();
+	}
+
+	void connect(const std::string& address)
+	{
+		client.connect(address);
 	}
 
 	std::string getAddress() const 
@@ -83,6 +100,13 @@ public:
         client.socket()->emit(eventName.c_str(), sio::binary_message::create(binaryString));
     }
 
+	void onMessage(const std::string& eventName, const std::function<void(const std::string&)>& callback) {
+        auto& socket = client.socket();
+		socket->on(eventName, [callback](sio::event ev) {
+			callback(ev.get_message()->get_string());
+		});
+     
+	}
 
 	NetworkManager (const NetworkManager&) = delete;
 	NetworkManager& operator= (const NetworkManager&) = delete;
