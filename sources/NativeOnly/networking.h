@@ -3,15 +3,14 @@
 #include <string>
 #include <sio_client.h>
 #include <sio_message.h>
+#include <rapidjson/rapidjson.h>
+#include <rapidjson/document.h>
 
 #include <iostream>
 #include <vector>
 #include <memory>
 #include <stdint.h>
-#include <mutex>
-
-
-
+#include <stdexcept>
 
 
 
@@ -20,7 +19,6 @@ class NetworkManager
 private:
 	std::string address;
 	sio::client client;
-	std::mutex event_mutex;
 
 	struct Listener {
 		std::string eventName;
@@ -42,7 +40,6 @@ public:
 	{
 		client.set_open_listener([&]() 
 		{
-			std::cout << "Connected to " << this->address << std::endl;
 		});
 	}
 
@@ -54,6 +51,7 @@ public:
 	void connect(const std::string& address)
 	{
 		client.connect(address);
+		this->address = address;
 	}
 
 	std::string getAddress() const 
@@ -105,7 +103,22 @@ public:
 		socket->on(eventName, [callback](sio::event ev) {
 			callback(ev.get_message()->get_string());
 		});
-     
+	}
+
+	void onJson(const std::string& eventName, const std::function<void(rapidjson::Document&)>& callback)
+	{
+		auto& socket = client.socket();
+		socket->on(eventName, [callback](sio::event ev) {
+			std::string jsonStr = ev.get_message()->get_string();
+			rapidjson::Document document;
+				
+			if (document.Parse(jsonStr.c_str()).HasParseError()) {
+				std::cerr << "Failed to parse JSON" << std::endl;
+				return;
+			}
+
+			callback(document);
+		});
 	}
 
 	NetworkManager (const NetworkManager&) = delete;

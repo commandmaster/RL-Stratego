@@ -254,21 +254,26 @@ public:
 
     void Draw()
     {
-        float scaledWidth = width * GetScreenWidth() / baseWidth;
-        float scaledHeight = height * GetScreenHeight() / baseHeight;
-
-        Vector2 position = CalculatePosition(scaledWidth, scaledHeight);
-        Rectangle rect = { position.x, position.y, scaledWidth, scaledHeight };
-
+		
         int fontSize = (int)UIElement::CalculateFontSize(GetFontDefault(), height - height / 4);
         int scaledFontSize = static_cast<int>(fontSize * GetScreenHeight() / baseHeight);
         int textWidth = MeasureText(text.c_str(), scaledFontSize);
         int textHeight = scaledFontSize;
 
-        rect.width = std::max<float>(scaledWidth, static_cast<float>(textWidth) + static_cast<float>(textWidth / 5));
+        float scaledWidth = width * GetScreenWidth() / baseWidth;
+        float scaledHeight = height * GetScreenHeight() / baseHeight;
+
+        scaledWidth =  std::max<float>(scaledWidth, static_cast<float>(textWidth) + static_cast<float>(textWidth / 5));
+
+        Vector2 position = CalculatePosition(scaledWidth, scaledHeight);
+        Rectangle rect = { position.x, position.y, scaledWidth, scaledHeight };
 
         DrawRectangleRec(rect, backgroundColor);
-        DrawRectangleLinesEx(rect, borderThickness * std::min<float>(GetScreenWidth() / baseWidth, GetScreenHeight() / baseHeight), borderColor);
+
+        if (borderThickness > 0)
+        {
+			DrawRectangleLinesEx(rect, borderThickness * std::min<float>(GetScreenWidth() / baseWidth, GetScreenHeight() / baseHeight), borderColor);
+		}
 
 
         float textX = rect.x + (rect.width - textWidth) / 2;

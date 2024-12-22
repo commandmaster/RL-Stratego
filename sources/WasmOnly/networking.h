@@ -1,12 +1,16 @@
 #pragma once
 
 #include <emscripten.h>
+#include "rapidjson/rapidjson.h"
+#include "rapidjson/document.h"
+
 #include <string>
 #include <memory>
 #include <vector>
 #include <stdint.h>
 #include <functional>
 #include <cstdlib>
+#include <iostream>
 
 class NetworkManager
 {
@@ -153,6 +157,42 @@ public:
                       	// Pass the message back to C++
 						Module.ccall(
 							'handleMessageFromJS', // C++ function name
+							null,                  // return type
+							['number', 'string'],  // parameter types
+							[callbackId, message]
+						);
+					});
+				} else {
+					console.error('Socket.io is not initialized yet!');
+				}
+			},
+			eventName.c_str(),
+			reinterpret_cast<intptr_t>(callbackWrapper)
+		);
+    }
+
+	void onJson(const std::string& eventName, const std::function<void(rapidjson::Document&)>& callback) 
+    {
+		auto callbackWrapper = new std::function<void(rapidjson::Document&)>(callback);
+
+
+        EM_ASM(
+            {
+				var eventName = UTF8ToString($0);
+				var callbackId = $1;
+
+                console.log("tried to setup listener");
+
+				if (window.socket) {
+					console.log("created event listener");
+					window.socket.on(eventName, function(message) {
+						if (typeof message === 'object') {
+							message = JSON.stringify(message);
+						}
+                        
+                      	// Pass the message back to C++
+						Module.ccall(
+							'handleJsonFromJS', // C++ function name
 							null,                  // return type
 							['number', 'string'],  // parameter types
 							[callbackId, message]

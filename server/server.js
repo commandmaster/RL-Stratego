@@ -43,7 +43,7 @@ io.on('connection', (socket) => {
         if (!roomID.startsWith("room-")) {
             roomID = "room-" + roomID;
         }
-
+        
         const game = games.get(roomID);
         
         if (!game) {

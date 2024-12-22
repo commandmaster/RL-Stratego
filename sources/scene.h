@@ -25,6 +25,8 @@ class Lobby : public GameScene
 private:
 	UI::Button hostButton;
     UI::Button joinButton;
+
+	UI::InputBox roomCodeInput;
 	
 	UI::Label ipLabel;
 	UI::InputBox ipInput;
@@ -42,12 +44,14 @@ private:
 		ROOM
 	};
 
+	bool isHost = false;
 	LobbyState lobbyState = LobbyState::LOBBY;
 
 	NetworkManager& netManager;
 public:
 	Lobby(int sWidth, int sHeight, NetworkManager& netManager)
-		: hostButton{ 0, -80, 600, 100, UI::Anchor::Center, true, 60 }, joinButton{ 0, 65, 600, 100, UI::Anchor::Center, true, 60 }, titleText{ 0, -350, std::string("Stratego"), UI::Anchor::Center, true, 125 }, ipLabel{ 50.0f, 45.0f, "IP Address", UI::Anchor::TopLeft, false, 30 }, ipInput{ 50.0f, 80.0f, 200.0f, 40.0f, UI::Anchor::TopLeft, false }, netManager{ netManager }
+		: hostButton{ 0, -80, 600, 100, UI::Anchor::Center, true, 60 }, joinButton{ 0, 65, 600, 100, UI::Anchor::Center, true, 60 }, roomCodeInput{0, 200, 600, 100, UI::Anchor::Center, true}, titleText {	0, -350, std::string("Stratego"), UI::Anchor::Center, true, 125
+	}, ipLabel{ 50.0f, 45.0f, "IP Address", UI::Anchor::TopLeft, false, 30 }, ipInput{ 50.0f, 80.0f, 200.0f, 40.0f, UI::Anchor::TopLeft, false }, netManager{ netManager }
 	{
 		hostButton.SetBaseResolution(1920, 1080);
 		hostButton.SetLabel("Host");
@@ -69,6 +73,13 @@ public:
 		{
 			netManager.connect(ip.GetLabelText());
 		});
+
+		roomCodeInput.SetBaseResolution(1920, 1080);
+		roomCodeInput.SetBackgroundColor(RAYWHITE);
+		roomCodeInput.SetBorderColor(BLACK);
+		roomCodeInput.SetLabelTextColor(BLACK);
+		roomCodeInput.SetLabelText("0000");
+		roomCodeInput.SetBorderThickness(0);
 
 		ipLabel.SetBaseResolution(1920, 1080);
 		ipLabel.SetTextColor(BLACK);
@@ -102,10 +113,24 @@ public:
 		if (hostButton.IsClicked())
 		{
 			netManager.sendMessage("createGame", "");
+			isHost = true;
+		}
+		if (joinButton.IsClicked())
+		{
+			isHost = false;
 		}
 
-		ipInput.CheckForInput();
-	}
+		switch (lobbyState)
+		{
+		case Lobby::LobbyState::LOBBY:
+			ipInput.CheckForInput();
+			roomCodeInput.CheckForInput();
+			break;
+		case Lobby::LobbyState::ROOM:
+			
+			break;
+		}
+		}
 
 	void uiRender()
 	{
@@ -118,9 +143,10 @@ public:
 			titleText.Draw();
 			ipLabel.Draw();
 			ipInput.Draw();
+			roomCodeInput.Draw();
 			break;
 		case Lobby::LobbyState::ROOM:
-
+			
 			break;
 		}
 		
