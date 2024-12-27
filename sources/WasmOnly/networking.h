@@ -26,6 +26,7 @@ private:
 
     std::string address;
     std::vector<Listener> listeners;
+    std::string socketID;
 
     void initializeSocketIO(const std::string& address) {
         EM_ASM(
@@ -33,7 +34,7 @@ private:
                 var serverAddress = UTF8ToString($0);
                 console.log('Socket.io loaded!');
                 window.socket.io.uri = serverAddress;
-                window.socket.connect();
+                window.socketID = window.socket.connect();
                 console.log('Connected to server at:', serverAddress);
 
            	},
@@ -175,7 +176,6 @@ public:
     {
 		auto callbackWrapper = new std::function<void(rapidjson::Document&)>(callback);
 
-
         EM_ASM(
             {
 				var eventName = UTF8ToString($0);
@@ -207,9 +207,73 @@ public:
 		);
     }
 
+    void onBinary(const std::string& eventName, const std::function<void(std::vector<uint8_t>&)>& callback)
+	{
+		auto callbackWrapper = new std::function<void(std::vector<uint8_t>&)>(callback);
+
+		EM_ASM(
+			{
+				var eventName = UTF8ToString($0);
+				var callbackId = $1;
+
+				console.log("Setting up binary listener for event:", eventName);
+
+				if (window.socket) {
+					console.log("Created binary event listener for:", eventName);
+
+					window.socket.on(eventName, function(message) {
+						if (message instanceof ArrayBuffer || message instanceof Uint8Array) {
+							// Convert the message to a Uint8Array if it's not already
+							var binaryData = new Uint8Array(message);
+
+							// Allocate memory in WASM and copy the data
+							var ptr = Module._malloc(binaryData.length);
+							Module.HEAPU8.set(binaryData, ptr);
+
+							Module.ccall(
+								'handleBinaryFromJS', // C++ function name
+								null,                 // return type
+								['number', 'number', 'number'], // parameter types
+								[callbackId, ptr, binaryData.length]
+							);
+
+							// Free the memory after use
+							Module._free(ptr);
+						} else {
+							console.error("Received non-binary data for binary event:", eventName);
+						}
+					});
+				} else {
+					console.error("Socket.io is not initialized yet!");
+				}
+			},
+			eventName.c_str(),
+			reinterpret_cast<intptr_t>(callbackWrapper)
+		);
+	}
+
+
+    std::string getSocketId() const
+    {
+        const void* jsResult = EM_ASM_PTR({
+            var result = window.socketID;
+            var length = lengthBytesUTF8(result) + 1; 
+            var buffer = _malloc(length); 
+			stringToUTF8(result, buffer, length); 
+			return buffer; 
+        });
+
+        std::string result(reinterpret_cast<const char*>(jsResult));
+        free((void*)jsResult);
+
+        return result;
+    }
+
     void sendBinary(const char* eventName, const uint8_t* binaryData, size_t dataSize) {
         sendBinary(eventName, reinterpret_cast<const char*>(binaryData), dataSize);
     }
+
+
 
 	NetworkManager (const NetworkManager&) = delete;
 	NetworkManager& operator= (const NetworkManager&) = delete;

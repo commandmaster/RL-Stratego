@@ -31,7 +31,7 @@ io.on('connection', (socket) => {
     socket.on("createGame", () => {
         console.log("Creating game");
         const roomID = "room-" + roomIdIndex++;
-        const game = new Game(roomID);
+        const game = new Game(io, roomID);
         socket.emit("roomCode", roomID);
         console.log("Room ID: " + roomID);  
         games.set(roomID, game);
@@ -39,18 +39,29 @@ io.on('connection', (socket) => {
     });
 
     socket.on("joinGame", (roomID) => {
+        console.log("Joining game with room ID: " + roomID);
+
         // Append 'room-' if not already present
-        if (!roomID.startsWith("room-")) {
+        if (!roomID.trim().startsWith("room-")) {
             roomID = "room-" + roomID;
         }
-        
+
         const game = games.get(roomID);
         
         if (!game) {
+            console.log("Invalid room ID, no game found with ID: " + roomID);
             socket.emit("invalidRoomID", "Invalid room ID");
             return;
         }
-        game.join(socket);
+        else if (game.playerCount >= 2) {
+            console.log("Room is full, cannot join");
+            socket.emit("roomFull", "Room is full");
+            return;
+        }
+        else {
+            game.join(socket);
+            socket.emit("roomCode", roomID);
+        }
     });
 
 

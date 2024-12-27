@@ -105,6 +105,19 @@ public:
 		});
 	}
 
+	void onBinary(const std::string& eventName, const std::function<void(std::vector<uint8_t>&)>& callback)
+	{
+		auto& socket = client.socket();
+		socket->on(eventName, [callback](sio::event ev) {
+			std::cout << "got binary message" << std::endl;
+
+			auto data = ev.get_message()->get_binary();
+
+			std::vector<uint8_t> binary(data->begin(), data->end());
+			callback(binary);
+		});		
+	}
+	
 	void onJson(const std::string& eventName, const std::function<void(rapidjson::Document&)>& callback)
 	{
 		auto& socket = client.socket();
@@ -119,6 +132,11 @@ public:
 
 			callback(document);
 		});
+	}
+	
+	std::string getSocketId() const
+	{
+		return client.get_sessionid();
 	}
 
 	NetworkManager (const NetworkManager&) = delete;

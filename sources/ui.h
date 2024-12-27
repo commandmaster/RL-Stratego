@@ -1,4 +1,8 @@
+
 #include "raylib.h"
+#include "rlAddons/raygui.h"
+
+
 #include "core.h"
 
 #include <string>
@@ -24,6 +28,80 @@ enum class Anchor
 };
 
 
+
+class ResponsiveGui {
+public:
+    static constexpr Vector2 BASE_RESOLUTION = {1920, 1080};
+
+    // Calculate the position and size of a component based on anchor and base position
+    static Rectangle CalculatePosition(Anchor anchor, Vector2 basePosition, Vector2 size) {
+        // Get current screen size and scaling factors
+        float screenWidth = GetScreenWidth();
+        float screenHeight = GetScreenHeight();
+        float scaleX = screenWidth / BASE_RESOLUTION.x;
+        float scaleY = screenHeight / BASE_RESOLUTION.y;
+
+        // Scale position and size
+        Vector2 scaledPosition = { basePosition.x * scaleX, basePosition.y * scaleY };
+        Vector2 scaledSize = { size.x * scaleX, size.y * scaleY };
+
+        // Calculate position based on anchor
+        Vector2 position = scaledPosition;
+        switch (anchor) {
+            case Anchor::TopLeft:
+                // Already top-left aligned
+                break;
+            case Anchor::TopRight:
+                position.x = screenWidth - scaledSize.x - scaledPosition.x;
+                break;
+            case Anchor::BottomLeft:
+                position.y = screenHeight - scaledSize.y - scaledPosition.y;
+                break;
+            case Anchor::BottomRight:
+                position.x = screenWidth - scaledSize.x - scaledPosition.x;
+                position.y = screenHeight - scaledSize.y - scaledPosition.y;
+                break;
+            case Anchor::Center:
+                position.x = (screenWidth - scaledSize.x) / 2.0f + scaledPosition.x;
+                position.y = (screenHeight - scaledSize.y) / 2.0f + scaledPosition.y;
+                break;
+            case Anchor::TopCenter:
+                position.x = (screenWidth - scaledSize.x) / 2.0f + scaledPosition.x;
+                break;
+            case Anchor::BottomCenter:
+                position.x = (screenWidth - scaledSize.x) / 2.0f + scaledPosition.x;
+                position.y = screenHeight - scaledSize.y - scaledPosition.y;
+                break;
+            case Anchor::CenterLeft:
+                position.y = (screenHeight - scaledSize.y) / 2.0f + scaledPosition.y;
+                break;
+            case Anchor::CenterRight:
+                position.x = screenWidth - scaledSize.x - scaledPosition.x;
+                position.y = (screenHeight - scaledSize.y) / 2.0f + scaledPosition.y;
+                break;
+        }
+
+        return { position.x, position.y, scaledSize.x, scaledSize.y };
+    }
+
+    // Scale font size based on screen resolution
+    static int ScaleFontSize(int baseFontSize) {
+        float scale = GetScreenHeight() / BASE_RESOLUTION.y; // Use vertical scaling for fonts
+        return static_cast<int>(baseFontSize * scale);
+    }
+
+    // Template to draw any raygui component with responsiveness
+    template <typename Component, typename... Args>
+    static bool DrawComponent(Anchor anchor, Vector2 basePosition, Vector2 size, Component component, Args... args) {
+        GuiSetStyle(DEFAULT, TEXT_SIZE, ScaleFontSize(20));
+        Rectangle rect = CalculatePosition(anchor, basePosition, size);
+        return component(rect, args...);
+    }
+
+};
+
+
+
 class UIElement
 {
 public:
@@ -38,7 +116,7 @@ public:
         : x(x), y(y), anchor(anchor), originCenter(originCenter)
     { }
 
-    virtual void Draw() {}
+    virtual void Draw() { if (!active) return; }
 
 	void SetPosition(float x, float y)
     {
@@ -63,11 +141,17 @@ public:
         this->anchor = anchor;
     }
 
+    void SetActive(bool a)
+    {
+        active = a;
+    }
+
 protected:
     float x, y;
     float baseWidth = 1920.0f, baseHeight = 1080.0f;
     Anchor anchor;
     bool originCenter;
+    bool active = true;
 
     Vector2 CalculatePosition(float textWidth, float textHeight) const
     {
@@ -157,6 +241,10 @@ public:
         textColor = color;
     }
 
+    std::string GetText() const
+    {
+        return text;
+    }
     
 
 private:
@@ -175,6 +263,8 @@ public:
 
 	void Draw()
     {
+        if (!active) return;
+
         float scaledWidth = width * GetScreenWidth() / baseWidth;
         float scaledHeight = height * GetScreenHeight() / baseHeight;
 
@@ -201,11 +291,13 @@ public:
 
     bool IsClicked() 
     {
+        if (!active) return false;
         return IsMouseButtonPressed(MOUSE_BUTTON_LEFT) && IsHovered();
     }
 
     bool IsHovered()
     {
+        if (!active) return false;
         float scaledWidth = width * GetScreenWidth() / baseWidth;
         float scaledHeight = height * GetScreenHeight() / baseHeight;
 
@@ -228,6 +320,11 @@ public:
     void SetLabelColor(Color color)
     {
         labelColor = color;
+    }
+
+    void SetFontSize(int size)
+    {
+        fontSize = size;
     }
 
 private:
@@ -254,6 +351,7 @@ public:
 
     void Draw()
     {
+        if (!active) return;
 		
         int fontSize = (int)UIElement::CalculateFontSize(GetFontDefault(), height - height / 4);
         int scaledFontSize = static_cast<int>(fontSize * GetScreenHeight() / baseHeight);
@@ -296,6 +394,7 @@ public:
 
     void CheckForInput()
     {
+        if (!active) return;
 		if (IsKeyPressed(KEY_ENTER) && focused)
         {
             for (auto& callback : callbacks)
@@ -307,6 +406,7 @@ public:
         if (CheckCollisionPointRec(GetMousePosition(), calculateBounds()) && IsMouseButtonPressed(MOUSE_BUTTON_LEFT))
         {
             focused = true;
+            cursorPos = text.size();
         }
         else if (IsMouseButtonPressed(MOUSE_BUTTON_LEFT) || IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_ENTER))
         {
@@ -403,6 +503,87 @@ private:
     // callbacks for On Enter Event
     std::vector<std::function<void(InputBox&)>> callbacks = {};
 
+};
+
+class Popup : public UIElement {
+public:
+    Popup(float x, float y, float width, float height, Anchor anchor = Anchor::TopLeft, bool originCenter = false)
+        : UIElement(x, y, anchor, originCenter), width(width), height(height),
+          inputBox(x, y - height / 4, width * 0.8f, height / 4, anchor, true),
+          submitButton(x, y + height / 4, width * 0.4f, height / 4, anchor, true) 
+    {
+        inputBox.SetBorderColor(BLACK);
+        inputBox.SetBackgroundColor(WHITE);
+        inputBox.SetLabelTextColor(BLACK);
+
+        submitButton.SetLabel("Join");
+        submitButton.SetButtonColor(DARKGRAY);
+        submitButton.SetLabelColor(WHITE);
+        submitButton.SetFontSize(20);
+    }
+
+    void Draw() 
+    {
+        if (!active) return;
+        // Draw popup background
+        Rectangle rect = calculateBounds();
+        DrawRectangleRec(rect, backgroundColor);
+        DrawRectangleLinesEx(rect, borderThickness, borderColor);
+
+        // Draw child elements
+        inputBox.Draw();
+        submitButton.Draw();
+    }
+
+    void CheckForInput() 
+    {
+        if (!active) return;
+        inputBox.CheckForInput();
+        if (submitButton.IsClicked()) {
+            if (onSubmit) {
+                onSubmit(inputBox.GetLabelText());
+            }
+        }
+    }
+
+    void SetBackgroundColor(Color color) { backgroundColor = color; }
+    void SetBorderColor(Color color) { borderColor = color; }
+    void SetBorderThickness(int thickness) { borderThickness = thickness; }
+
+    void SetOnSubmit(const std::function<void(const std::string&)>& callback) 
+    { 
+        onSubmit = callback;
+        inputBox.OnSubmit([callback](UI::InputBox& inpBox) {
+            callback(inpBox.GetLabelText());
+        });
+    }
+
+    void SetLabelFontSize(int size)
+    {
+        submitButton.SetFontSize(size);
+    }
+
+private:
+    Rectangle calculateBounds() 
+    {
+        float scaledWidth = width * GetScreenWidth() / baseWidth;
+        float scaledHeight = height * GetScreenHeight() / baseHeight;
+
+        Vector2 position = CalculatePosition(scaledWidth, scaledHeight);
+
+        return { position.x, position.y, scaledWidth, scaledHeight };
+    }
+
+    float width, height;
+    int borderThickness = 2;
+    Color backgroundColor = DARKGRAY;
+    Color borderColor = BLACK;
+
+    int labelFontSize;
+
+    InputBox inputBox;
+    Button submitButton;
+    std::function<void(const std::string&)> onSubmit;
 };
 
 } // namespace UI

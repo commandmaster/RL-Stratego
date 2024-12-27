@@ -1,6 +1,7 @@
 #include <iostream>
 #include <memory>
 
+#define RAYGUI_IMPLEMENTATION
 #include "raylib.h"
 #include "rlgl.h"
 #include "raymath.h"
@@ -42,24 +43,9 @@ int main()
 	int screenHeight = 540;
 
 	constexpr int LOBBY_MODE = 0;
-	constexpr int PLACE_MODE = 1;
-	constexpr int PLAY_MODE = 2;
+	constexpr int GAME_MODE = 1;
 
 	int gameState = LOBBY_MODE;
-	Grid gameGrid{
-		{
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0,		
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0,		
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0,		
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0,		
-			2, 2, 1, 1, 2, 2, 1, 1, 2, 2,		
-			2, 2, 1, 1, 2, 2, 1, 1, 2, 2,		
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0,		
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0,		
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0,		
-			0, 0, 0, 0, 0, 0, 0, 0, 0, 0	
-		}
-	};
 
 	NATIVE_ONLY(SetConfigFlags(FLAG_WINDOW_RESIZABLE););
 	InitWindow(screenWidth, screenHeight, "Stratego");
@@ -72,23 +58,24 @@ int main()
 	auto lobbyScene = std::make_shared<Lobby>(screenWidth, screenHeight, netManager);
 	sceneManager.instantiateScene(lobbyScene);
 
+	netManager.onMessage("changeGameState", [&](const std::string& message)
+	{
+		if (std::stoi(message) == GAME_MODE)
+		{
+			gameState = GAME_MODE;
+			auto gameScene = std::make_shared<Game>(lobbyScene->getIsHost(), sceneManager.camera);
+
+			sceneManager.instantiateScene(gameScene);
+		}
+	});
+
+	SetExitKey(0);
 	while (!WindowShouldClose())  
 	{
 		BeginDrawing();
 
 		sceneManager.beginUpdate(&screenWidth, &screenHeight);
 
-		if (gameState == PLACE_MODE || gameState == PLAY_MODE)
-		{
-			constexpr int cellWidth = 100;
-			constexpr int cellHeight = 100;
-
-			drawGameBoard(gameGrid, cellWidth, cellHeight);
-		}
-		else if (gameState == LOBBY_MODE)
-		{
-
-		}
 		
 		sceneManager.endUpdate();
 
