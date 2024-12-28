@@ -18,6 +18,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <array>
 
 class GameScene
 {
@@ -63,6 +64,7 @@ private:
 	};
 
 	bool isHost = false;
+
 	LobbyState lobbyState = LobbyState::LOBBY;
 
 	NetworkManager& netManager;
@@ -351,10 +353,22 @@ private:
 	Pieces pieces;
 	Mode mode = Mode::PLACE;
 	bool isHost;
+	bool isReady = false;
+
+
 	Camera2D& camera;
 
 	static constexpr int cellWidth = 100;
 	static constexpr int cellHeight = 100;
+
+	int selectedGridSquare = -1;
+
+	bool isMoveableSquare(int x, int y)
+	{
+		if (x < 0 || x >= Grid::COLUMNS || y < 0 || y >= Grid::ROWS) return false;
+
+		return gameGrid.board[x + y * Grid::COLUMNS] == Grid::EMPTY || gameGrid.board[x + y * Grid::COLUMNS] == Grid::UNPLACEABLE || gameGrid.board[x + y * Grid::COLUMNS] & (isHost ? Grid::TEAM_BLUE : Grid::TEAM_RED);
+	}
 	
 public:
 	Game(bool isHost, Camera2D& camera)
@@ -386,27 +400,32 @@ public:
 		NetworkManager::getInstance().sendMessage("boardLoaded", "");
 		
 
-		
+		NetworkManager::getInstance().onMessage("playGame", [&](const std::string& message) {
+			mode = Mode::MOVE;
+		});
 	}
 
 	void uiRender()
 	{
 		if (mode == Mode::PLACE)
 		{
-			drawReadyUpButton(pieces);
+			drawReadyUpButton();
 		}
 	}
 
 	void sceneRender()
 	{
-		drawGameBoard(gameGrid, cellWidth, cellHeight);
+		drawGameBoard(gameGrid, cellWidth, cellHeight, selectedGridSquare);
 
 		if (mode == Mode::PLACE)
 		{
 			drawPiecePicker(cellWidth, cellHeight, isHost, pieces);
 
 		}
-
+		else if (mode == Mode::MOVE)
+		{
+			drawPieceMoves(selectedGridSquare);
+		}
 	}
 
 	void update()
@@ -417,21 +436,169 @@ public:
 			placePiece(pieces, gameGrid, cellWidth, cellHeight, isHost, camera);
 			deletePiece(pieces, gameGrid, cellWidth, cellHeight, isHost, camera);
 		}
+		else if (mode == Mode::MOVE)
+		{
+			selectPieceToMove();
+		}
 	}
 
-	static void drawReadyUpButton(const Pieces& pieces)
+	void drawReadyUpButton()
 	{
 		if (!pieces.isEmpty()) return; // Don't draw when the board isn't full 
 
-		if (UI::ResponsiveGui::DrawComponent(UI::Anchor::CenterRight, {125, 0}, {230, 50}, GuiButton, "Ready Up")) {
-
+		if (UI::ResponsiveGui::DrawComponent(UI::Anchor::CenterRight, {125, 0}, {230, 50}, GuiButton, (isReady ? "Un Ready" : "Ready Up"))) {
+			if (isReady)
+			{
+				NetworkManager::getInstance().sendMessage("unReady", "");
+			}
+			else
+			{
+				NetworkManager::getInstance().sendMessage("ready", "");
+			}
+			isReady = !isReady;
 		}
+	}
+
+	void drawPieceMoves(int selectedGridSqaure)
+	{
+		auto moves = generatePieceMoves(selectedGridSqaure);
+
+		for (const auto& move : moves)
+		{
+			int cellX = move.x * cellWidth + GetScreenWidth() / 2 - cellWidth * Grid::COLUMNS / 2;
+			int cellY = move.y * cellHeight + GetScreenHeight() / 2 - cellHeight * Grid::ROWS / 2;
+
+			DrawCircle(cellX + cellWidth / 2, cellY + cellHeight / 2, 10, LIGHTGRAY);
+		}
+	}
+
+	std::vector<Vector2> generatePieceMoves(int selectedGridSqaure)
+	{
+		if (selectedGridSqaure == -1) return {};
+
+		int x = selectedGridSqaure % Grid::COLUMNS;
+		int y = selectedGridSqaure / Grid::COLUMNS;
+
+		uint8_t piece = gameGrid.board[selectedGridSqaure] & ~Grid::TEAM_MASK;
+
+		std::vector<Vector2> moves;
+
+		switch (piece)
+		{
+		case Grid::FLAG:
+			break;
+		case Grid::BOMB:
+			break;
+		case Grid::SCOUT:
+			for (int i = 1; i < Grid::COLUMNS; ++i)
+			{
+				if (isMoveableSquare(x + i, y))
+				{
+					moves.emplace_back(x + i, y);
+					if (gameGrid.board[x + i + y * Grid::COLUMNS] & (isHost ? Grid::TEAM_BLUE : Grid::TEAM_RED)) break;
+				}
+				else
+				{
+					break;
+				}
+			}
+			for (int i = 1; i < Grid::COLUMNS; ++i)
+			{
+				if (isMoveableSquare(x - i, y))
+				{
+					moves.emplace_back(x - i, y);
+					if (gameGrid.board[x - i + y * Grid::COLUMNS] & (isHost ? Grid::TEAM_BLUE : Grid::TEAM_RED)) break;
+				}
+				else
+				{
+					break;
+				}
+			}
+			for (int i = 1; i < Grid::ROWS; ++i)
+			{
+				if (isMoveableSquare(x, y + i))
+				{
+					moves.emplace_back(x, y + i);
+					if (gameGrid.board[x + (y + i) * Grid::COLUMNS] & (isHost ? Grid::TEAM_BLUE : Grid::TEAM_RED)) break;
+				}
+				else
+				{
+					break;
+				}
+			}
+			for (int i = 1; i < Grid::ROWS; ++i)
+			{ 
+				if (isMoveableSquare(x, y - i))
+				{
+					moves.emplace_back(x, y - i);
+					if (gameGrid.board[x + (y - i) * Grid::COLUMNS] & (isHost ? Grid::TEAM_BLUE : Grid::TEAM_RED)) break;
+				}
+				else
+				{
+					break;
+				}
+
+			}
+			break;
+
+		case Grid::SPY:
+		case Grid::MINER:
+		case Grid::SERGEANT:
+		case Grid::LIEUTENANT:
+		case Grid::CAPTAIN:
+		case Grid::MAJOR:
+		case Grid::COLONEL:
+		case Grid::GENERAL:
+		case Grid::MARSHAL:
 			
+			std::array<Vector2, 4> possibleMoves{ Vector2(-1, 0), Vector2(1, 0), Vector2(0, -1), Vector2(0, 1) };
+			
+			for (auto& move : possibleMoves)
+			{
+				int newX = x + move.x;
+				int newY = y + move.y;
+
+				if (newX >= 0 && newX < Grid::COLUMNS && newY >= 0 && newY < Grid::ROWS)
+				{
+					if (isMoveableSquare(newX, newY))
+					{
+						moves.emplace_back(newX, newY);
+					}
+				}
+			}
+			break;
+		}
+
+		return moves;
+	}
+
+	void selectPieceToMove()
+	{
+		if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) return;
+
+		Vector2 mousePos = GetScreenToWorld2D(GetMousePosition(), camera);
+		for (int i = 0; i < Grid::COLUMNS; ++i)
+		{
+			for (int j = 0; j < Grid::ROWS; ++j)
+			{
+				int cellX = i * cellWidth + GetScreenWidth() / 2 - cellWidth * Grid::COLUMNS / 2;
+				int cellY = j * cellHeight + GetScreenHeight() / 2 - cellHeight * Grid::ROWS / 2;
+				Rectangle pieceRect = { static_cast<float>(cellX), static_cast<float>(cellY), static_cast<float>(cellWidth), static_cast<float>(cellHeight) };
+
+				if (!CheckCollisionPointRec(mousePos, pieceRect)) continue;
+
+				if (gameGrid.board[i + j * Grid::COLUMNS] != Grid::EMPTY && gameGrid.board[i + j * Grid::COLUMNS] & (isHost ? Grid::TEAM_RED : Grid::TEAM_BLUE))
+				{
+					selectedGridSquare = i + j * Grid::COLUMNS;
+				}
+			}
+		}
 	}
 
 	static void deletePiece(Pieces& pieces, Grid& grid, int cellWidth, int cellHeight, bool isRed, const Camera2D& camera)
 	{
 		if (!IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) return;
+		if (!(pieces.selectedPiece >= 3 && pieces.selectedPiece < 15)) return;
 
 		Vector2 mousePos = GetScreenToWorld2D(GetMousePosition(), camera);
 		for (int i = 0; i < Grid::COLUMNS; ++i)
@@ -475,6 +642,7 @@ public:
 	static void placePiece(Pieces& pieces, Grid& grid, int cellWidth, int cellHeight, bool isRed, const Camera2D& camera)
 	{
 		if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) return;
+		if (!(pieces.selectedPiece >= 3 && pieces.selectedPiece < 15)) return;
 
 		// Transform the mouse position to world coordinates
 		Vector2 mousePos = GetScreenToWorld2D(GetMousePosition(), camera);
@@ -519,6 +687,7 @@ public:
 	{
 		// Transform the mouse position to world coordinates
 		Vector2 mousePos = GetScreenToWorld2D(GetMousePosition(), camera);
+
 
 		for (int i = 0; i < 12; ++i)
 		{
@@ -711,7 +880,7 @@ public:
 	}
 
 
-	static void drawGameBoard(const Grid& grid, int cellWidth, int cellHeight)
+	static void drawGameBoard(const Grid& grid, int cellWidth, int cellHeight, int selectedSquare = -1)
 	{
 		for (int i = 0; i < Grid::COLUMNS; ++i)
 		{
@@ -731,7 +900,10 @@ public:
 				}
 				else
 				{
-					if ((squareValue & ~Grid::TEAM_MASK) != Grid::EMPTY && (squareValue) != Grid::UNPLACEABLE) DrawRectangle(cellX, cellY, cellWidth, cellHeight, (squareValue & Grid::TEAM_RED) ? RED : DARKBLUE);
+					Color color = (squareValue & Grid::TEAM_RED) ? RED : DARKBLUE;
+					if (i + j * Grid::COLUMNS == selectedSquare) color = Color(color.r, color.b, color.g, 100);
+
+					if ((squareValue & ~Grid::TEAM_MASK) != Grid::EMPTY && (squareValue) != Grid::UNPLACEABLE) DrawRectangle(cellX, cellY, cellWidth, cellHeight, color);
 					DrawRectangleLines(i * cellWidth + GetScreenWidth() / 2 - cellWidth * Grid::COLUMNS / 2, 
 									   j * cellHeight + GetScreenHeight() / 2 - cellHeight * Grid::ROWS / 2, 
 									   cellWidth, cellHeight, borderColor);

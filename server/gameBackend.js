@@ -368,6 +368,26 @@ class Game{
                 }
             });
 
+            playerSocket.on("ready", () => {
+                player.ready = true;
+                playerSocket.to(this.roomID).emit("playerReady", player.color);
+
+                if(this.players[Object.keys(this.players)[0]].ready && this.players[Object.keys(this.players)[1]].ready){
+                    console.log("Both players are ready");
+
+                    this.io.to(this.roomID).emit("playGame", String(GAME_MODE));
+                    this.#sendBoard(this.players[Object.keys(this.players)[0]]);
+                    this.#sendBoard(this.players[Object.keys(this.players)[1]]);
+
+                    this.mode = Game.MOVE_MODE;
+                }
+            });
+
+            playerSocket.on("unReady", () => {
+                player.ready = false;
+                playerSocket.to(this.roomID).emit("playerUnReady", player.color);
+            });
+
             playerSocket.emit("changeGameState", String(GAME_MODE));
 
             playerSocket.on("boardLoaded", (message) => {

@@ -12,30 +12,6 @@
 #include "gameGrid.h"
 #include "scene.h"
 
-static void drawGameBoard(const Grid& grid, int cellWidth, int cellHeight)
-{
-	for (int i = 0; i < Grid::COLUMNS; ++i)
-		{
-			for (int j = 0; j < Grid::ROWS; ++j)
-			{
-				Color borderColor = GRAY;
-
-				if (grid.board[i + j * Grid::COLUMNS] == 1)
-				{
-					DrawRectangle(i * cellWidth + GetScreenWidth() / 2 - cellWidth * Grid::COLUMNS / 2, 
-								  j * cellHeight + GetScreenHeight() / 2 - cellHeight * Grid::ROWS / 2, 
-								  cellWidth, cellHeight, BLUE);
-				}
-				else
-				{
-					DrawRectangleLines(i * cellWidth + GetScreenWidth() / 2 - cellWidth * Grid::COLUMNS / 2, 
-									   j * cellHeight + GetScreenHeight() / 2 - cellHeight * Grid::ROWS / 2, 
-									   cellWidth, cellHeight, borderColor);
-				}
-			}
-		}
-}
-
 
 int main()
 {
