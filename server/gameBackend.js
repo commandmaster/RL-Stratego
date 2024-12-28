@@ -289,6 +289,41 @@ class Game{
             const player = this.players[playerId];
             const playerSocket = this.io.sockets.sockets.get(player.socketID);
 
+
+           playerSocket.on("deletePiece", (message) => {
+                const data = JSON.parse(message);
+                const row = data.row;
+                const column = data.column;
+
+                if(this.mode !== Game.PLACE_MODE){
+                    return;
+                }
+
+                if (player.color === "red")
+                {
+                    if (this.gameBoard.getValueAt(row, column) & Grid.TEAM_RED)
+                    {
+                        let piece = this.gameBoard.getValueAt(row, column) & ~Grid.TEAM_RED;
+                        player.pieceInfo.pieces[piece].count++;
+                        this.gameBoard.setValueAt(row, column, Grid.EMPTY);
+                        playerSocket.emit("setBoard", JSON.stringify(Array.from(Grid.getRedBoard(this.gameBoard))));
+                        playerSocket.to(this.roomID).emit("setBoard", JSON.stringify(Array.from(Grid.getBlueBoard(this.gameBoard))));
+                    }
+                }
+                else
+                {
+                    if (this.gameBoard.getValueAt(9 - row, 9 - column) & Grid.TEAM_BLUE)
+                    {
+                        let piece = this.gameBoard.getValueAt(9 - row, 9 - column) & ~Grid.TEAM_BLUE;
+                        player.pieceInfo.pieces[piece].count++;
+                        this.gameBoard.setValueAt(9 - row, 9 - column, Grid.EMPTY);
+                        playerSocket.emit("setBoard", JSON.stringify(Array.from(Grid.getBlueBoard(this.gameBoard))));
+                        playerSocket.to(this.roomID).emit("setBoard", JSON.stringify(Array.from(Grid.getRedBoard(this.gameBoard))));
+                    }
+                }
+
+           }); 
+            
             playerSocket.on("placePiece", (message) => {
                 const data = JSON.parse(message);
                 const piece = data.piece;

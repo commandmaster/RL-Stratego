@@ -3,6 +3,7 @@
 
 #include "core.h"
 #include "raylib.h"
+
 #include "ui.h"
 #include "networking.h"
 #include "gameGrid.h"
@@ -320,6 +321,16 @@ private:
 			}
 			return pieceArr[index];
 		}
+
+		bool isEmpty() const
+		{
+			for (size_t i = 0; i < 12; ++i) {
+				if (pieceArr[i] != 0) {
+					return false;
+				}
+			}
+			return true;
+		}
 	};
 
 	Grid gameGrid{
@@ -380,24 +391,48 @@ public:
 
 	void uiRender()
 	{
-
+		if (mode == Mode::PLACE)
+		{
+			drawReadyUpButton(pieces);
+		}
 	}
 
 	void sceneRender()
 	{
 		drawGameBoard(gameGrid, cellWidth, cellHeight);
-		drawPiecePicker(cellWidth, cellHeight, isHost, pieces);
+
+		if (mode == Mode::PLACE)
+		{
+			drawPiecePicker(cellWidth, cellHeight, isHost, pieces);
+
+		}
 
 	}
 
 	void update()
 	{
-		pickPiece(pieces, cellWidth, cellHeight, camera);
-		placePiece(pieces, gameGrid, cellWidth, cellHeight, isHost, camera);
+		if (mode == Mode::PLACE)
+		{
+			pickPiece(pieces, cellWidth, cellHeight, camera);
+			placePiece(pieces, gameGrid, cellWidth, cellHeight, isHost, camera);
+			deletePiece(pieces, gameGrid, cellWidth, cellHeight, isHost, camera);
+		}
+	}
+
+	static void drawReadyUpButton(const Pieces& pieces)
+	{
+		if (!pieces.isEmpty()) return; // Don't draw when the board isn't full 
+
+		if (UI::ResponsiveGui::DrawComponent(UI::Anchor::CenterRight, {125, 0}, {230, 50}, GuiButton, "Ready Up")) {
+
+		}
+			
 	}
 
 	static void deletePiece(Pieces& pieces, Grid& grid, int cellWidth, int cellHeight, bool isRed, const Camera2D& camera)
 	{
+		if (!IsMouseButtonPressed(MOUSE_RIGHT_BUTTON)) return;
+
 		Vector2 mousePos = GetScreenToWorld2D(GetMousePosition(), camera);
 		for (int i = 0; i < Grid::COLUMNS; ++i)
 		{
@@ -406,22 +441,41 @@ public:
 				int cellX = i * cellWidth + GetScreenWidth() / 2 - cellWidth * Grid::COLUMNS / 2;
 				int cellY = j * cellHeight + GetScreenHeight() / 2 - cellHeight * Grid::ROWS / 2;
 				Rectangle pieceRect = { static_cast<float>(cellX), static_cast<float>(cellY), static_cast<float>(cellWidth), static_cast<float>(cellHeight) };
-				if (IsMouseButtonPressed(MOUSE_RIGHT_BUTTON))
+					
+				if (!CheckCollisionPointRec(mousePos, pieceRect)) continue;
+
+				if (grid.board[i + j * Grid::COLUMNS] != Grid::EMPTY && grid.board[i + j * Grid::COLUMNS] & (isRed? Grid::TEAM_RED : Grid::TEAM_BLUE))
 				{
-					if (CheckCollisionPointRec(mousePos, pieceRect))
-					{
-						if (grid.board[i + j * Grid::COLUMNS] != Grid::EMPTY && grid.board[i + j * Grid::COLUMNS] & (isRed? Grid::TEAM_RED : Grid::TEAM_BLUE))
-						{
-							grid.board[i + j * Grid::COLUMNS] = Grid::EMPTY;
-						}
-					}
+					// update piece info
+					pieces[grid.board[i + j * Grid::COLUMNS] & ~Grid::TEAM_MASK]++;
+					
+					// clear the slot in the board to avoid the client-server round trip latency
+					grid.board[i + j * Grid::COLUMNS] = Grid::EMPTY;
+
+					rapidjson::Document document;
+					document.SetObject();
+
+					int column = i;
+					int row = j;
+					
+					document.AddMember("column", column, document.GetAllocator());
+					document.AddMember("row", row, document.GetAllocator());
+
+					rapidjson::StringBuffer buffer;
+					rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+					document.Accept(writer);
+					
+					NetworkManager::getInstance().sendMessage("deletePiece", buffer.GetString());
 				}
+			
 			}
 		}
 	}
 
 	static void placePiece(Pieces& pieces, Grid& grid, int cellWidth, int cellHeight, bool isRed, const Camera2D& camera)
 	{
+		if (!IsMouseButtonPressed(MOUSE_LEFT_BUTTON)) return;
+
 		// Transform the mouse position to world coordinates
 		Vector2 mousePos = GetScreenToWorld2D(GetMousePosition(), camera);
 		for (int i = 0; i < Grid::COLUMNS; ++i)
@@ -433,33 +487,29 @@ public:
 
 				Rectangle pieceRect = { static_cast<float>(cellX), static_cast<float>(cellY), static_cast<float>(cellWidth), static_cast<float>(cellHeight) };
 
-				if (IsMouseButtonPressed(MOUSE_LEFT_BUTTON))
+				if (!CheckCollisionPointRec(mousePos, pieceRect)) continue;
+
+				if (grid.board[i + j * Grid::COLUMNS] == (Grid::EMPTY & (isRed ? Grid::TEAM_RED : Grid::TEAM_BLUE)) && pieces[pieces.selectedPiece] > 0)
 				{
-					if (CheckCollisionPointRec(mousePos, pieceRect))
-					{
-						if (grid.board[i + j * Grid::COLUMNS] == (Grid::EMPTY & (isRed ? Grid::TEAM_RED : Grid::TEAM_BLUE)) && pieces[pieces.selectedPiece] > 0)
-						{
-							grid.board[i + j * Grid::COLUMNS] = pieces.selectedPiece | (isRed ? Grid::TEAM_RED : Grid::TEAM_BLUE);
-							pieces[pieces.selectedPiece]--;
+					grid.board[i + j * Grid::COLUMNS] = pieces.selectedPiece | (isRed ? Grid::TEAM_RED : Grid::TEAM_BLUE);
+					pieces[pieces.selectedPiece]--;
 
-							rapidjson::Document document;
-							document.SetObject();
+					rapidjson::Document document;
+					document.SetObject();
 
-							int column = i;
-							int row = j;
-							int piece = pieces.selectedPiece;
-							
-							document.AddMember("column", column, document.GetAllocator());
-							document.AddMember("row", row, document.GetAllocator());
-							document.AddMember("piece", piece, document.GetAllocator());
+					int column = i;
+					int row = j;
+					int piece = pieces.selectedPiece;
+					
+					document.AddMember("column", column, document.GetAllocator());
+					document.AddMember("row", row, document.GetAllocator());
+					document.AddMember("piece", piece, document.GetAllocator());
 
-							rapidjson::StringBuffer buffer;
-							rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
-							document.Accept(writer);
-							
-							NetworkManager::getInstance().sendMessage("placePiece", buffer.GetString());
-						}
-					}
+					rapidjson::StringBuffer buffer;
+					rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+					document.Accept(writer);
+					
+					NetworkManager::getInstance().sendMessage("placePiece", buffer.GetString());
 				}
 			}
 		}
